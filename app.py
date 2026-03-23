@@ -22,8 +22,8 @@ df = pd.read_csv("diabetes_qa_combined.csv", encoding="latin1")
 questions = df["question"].astype(str).tolist()
 answers = df["answer"].astype(str).tolist()
 
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
-question_embeddings = embedder.encode(questions, normalize_embeddings=True)
+embedder = None
+question_embeddings = None
 
 active_notifications = []
 
@@ -161,11 +161,17 @@ def set_reminder():
     return jsonify({"status": "success"})
 
 def get_best_answer(query_en):
+    global embedder, question_embeddings
+
+    if embedder is None:
+        embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        question_embeddings = embedder.encode(questions, normalize_embeddings=True)
+
     query_emb = embedder.encode([query_en], normalize_embeddings=True)
     sims = cosine_similarity(query_emb, question_embeddings)[0]
     idx = sims.argmax()
-    return answers[idx] if sims[idx] > 0.6 else "Please consult a doctor."
 
+    return answers[idx] if sims[idx] > 0.6 else "Please consult a doctor."
 if __name__ == '__main__':
     import os
     port = int(os.environ.get("PORT", 10000))
