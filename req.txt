@@ -1,0 +1,10 @@
+Flask
+flask-cors
+pandas
+sentence-transformers
+scikit-learn
+deep-translator
+SpeechRecognition
+pydub
+gTTS
+gunicorn

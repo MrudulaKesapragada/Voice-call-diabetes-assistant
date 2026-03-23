@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diabetes Care Call</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .pulse-ring {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.1); opacity: 0.3; }
+            100% { transform: scale(1); opacity: 0.7; }
+        }
+        .chat-container::-webkit-scrollbar { width: 4px; }
+        .chat-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-900 h-screen flex items-center justify-center font-sans overflow-hidden">
+
+    <div class="bg-white w-[1000px] h-[700px] rounded-3xl shadow-2xl flex overflow-hidden">
+        
+        <div class="w-1/2 bg-gradient-to-b from-blue-600 to-blue-800 p-8 flex flex-col items-center justify-between text-white">
+            <div class="text-center">
+                <h2 class="text-2xl font-bold mb-2">Diabetes Health Assistant</h2>
+                <div id="status" class="text-blue-200 text-sm">Status: Ready to help</div>
+            </div>
+
+            <div class="relative">
+                <div id="mic-circle" class="w-48 h-48 rounded-full bg-blue-500 flex items-center justify-center shadow-inner relative z-10">
+                    <i class="fas fa-hand-holding-medical text-6xl"></i>
+                </div>
+                <div id="pulse" class="hidden absolute top-0 left-0 w-48 h-48 rounded-full bg-blue-400 pulse-ring"></div>
+            </div>
+
+            <div class="flex flex-col items-center gap-6">
+                <select id="lang" class="bg-blue-700 border-none rounded-lg px-4 py-2 text-white focus:ring-2 ring-white">
+                    <option value="en">English</option>
+                    <option value="te">తెలుగు (Telugu)</option>
+                </select>
+                
+                <button id="call-btn" class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:bg-green-600 transition-all transform active:scale-95">
+                    <i class="fas fa-phone text-3xl"></i>
+                </button>
+                <p class="text-sm text-blue-100">Click the phone to start speaking</p>
+            </div>
+        </div>
+
+        <div class="w-1/2 flex flex-col bg-slate-50">
+            <div class="p-6 border-b bg-white">
+                <h3 class="font-semibold text-slate-700">Conversation History</h3>
+            </div>
+            
+            <div id="chat-box" class="chat-container flex-1 p-6 overflow-y-auto space-y-4 flex flex-col">
+                <div class="bg-blue-100 self-start p-3 rounded-2xl rounded-tl-none max-w-[80%] text-sm text-slate-800 shadow-sm">
+                    Hello! Choose your language and click the phone icon to ask me anything about Diabetes.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const callBtn = document.getElementById('call-btn');
+        const pulse = document.getElementById('pulse');
+        const status = document.getElementById('status');
+        const chatBox = document.getElementById('chat-box');
+        const langSelect = document.getElementById('lang');
+
+        function appendMessage(text, isUser) {
+            const div = document.createElement('div');
+            div.className = isUser 
+                ? "bg-blue-600 text-white self-end p-3 rounded-2xl rounded-tr-none max-w-[80%] text-sm shadow-md"
+                : "bg-white text-slate-800 self-start p-3 rounded-2xl rounded-tl-none max-w-[80%] text-sm shadow-sm border border-slate-200";
+            div.innerText = text;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        callBtn.onclick = async () => {
+            // UI Update
+            pulse.classList.remove('hidden');
+            callBtn.classList.replace('bg-green-500', 'bg-red-500');
+            status.innerText = "Listening...";
+
+            try {
+                const response = await fetch('/process_voice', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ lang: langSelect.value })
+                });
+
+                const data = await response.json();
+
+                if (data.user_text) {
+                    appendMessage(data.user_text, true);
+                    appendMessage(data.assistant_response, false);
+                }
+            } catch (err) {
+                appendMessage("Error: Could not hear you clearly.", false);
+            } finally {
+                pulse.classList.add('hidden');
+                callBtn.classList.replace('bg-red-500', 'bg-green-500');
+                status.innerText = "Status: Ready";
+            }
+        };
+    </script>
+</body>
+</html>
