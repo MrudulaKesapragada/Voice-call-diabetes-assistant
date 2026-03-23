@@ -5,3 +5,10 @@ node_modules/
 dist/
 .env
 ffmpeg/
+*.mp3
+*.wav
+*.webm
+*.db
+temp*
+response*
+reminder_*

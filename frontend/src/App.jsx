@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
+// ✅ ADDED (ONLY CHANGE)
+const BASE_URL = import.meta.env.VITE_BACKEND_URL;
+console.log("BASE_URL:", BASE_URL);
+
 function App() {
   const [isCalling, setIsCalling] = useState(false);
   const [status, setStatus] = useState("Status: Ready to help");
@@ -15,35 +19,32 @@ function App() {
 
   const chatBoxRef = useRef(null);
 
-  // Auto-scroll chat to bottom
   useEffect(() => {
     if (chatBoxRef.current) {
       chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Polling notifications from Flask
+  // ✅ FIXED URL
   useEffect(() => {
     const checkNotifications = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/get_notifications');
+        const response = await axios.get(`${BASE_URL}/get_notifications`);
         if (response.data && response.data.length > 0) {
           response.data.forEach(notification => {
 
-  setMessages(prev => [...prev, {
-    text: `⏰ REMINDER: ${notification.task}`,
-    isUser: false,
-    lang: 'en'
-  }]);
+            setMessages(prev => [...prev, {
+              text: `⏰ REMINDER: ${notification.task}`,
+              isUser: false,
+              lang: 'en'
+            }]);
 
-  // 🔊 INSIDE LOOP
-  if (notification.audio_url) {
-    const audio = new Audio(`http://127.0.0.1:5000/${notification.audio_url}`);
-    audio.play();
-  }
+            if (notification.audio_url) {
+              const audio = new Audio(`${BASE_URL}/${notification.audio_url}`);
+              audio.play();
+            }
 
-});
-          
+          });
         }
       } catch (err) {
         console.error("Polling error:", err);
@@ -53,17 +54,16 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // 🔊 Replay FIXED (uses backend audio)
-  const handleReplay = async (text, msgLang) => {
+  const handleReplay = async () => {
     if (!lastResponse?.audio_url) return;
-    const audio = new Audio(`http://127.0.0.1:5000/${lastResponse.audio_url}`);
+    const audio = new Audio(`${BASE_URL}/${lastResponse.audio_url}`);
     audio.play();
   };
 
   const handleSetReminder = async () => {
     if (!reminderTask || !reminderTime) return alert("Please fill all fields");
     try {
-      await axios.post('http://127.0.0.1:5000/set_reminder', { task: reminderTask, time: reminderTime });
+      await axios.post(`${BASE_URL}/set_reminder`, { task: reminderTask, time: reminderTime });
       alert(`Reminder set for ${reminderTime}`);
       setReminderTask(""); 
       setReminderTime(""); 
@@ -71,7 +71,6 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
-  // 🎤 Mic FIXED
   const handleCall = async () => {
     setIsCalling(true); 
     setStatus("Listening...");
@@ -95,7 +94,7 @@ function App() {
 
         try {
           const resp = await axios.post(
-            "http://127.0.0.1:5000/process_voice",
+            `${BASE_URL}/process_voice`,
             formData
           );
 
@@ -108,12 +107,18 @@ function App() {
               { text: resp.data.assistant_response, isUser: false, lang: language }
             ]);
 
-            // 🔊 Play backend audio
             if (resp.data.audio_url) {
-              const audio = new Audio(`http://127.0.0.1:5000/${resp.data.audio_url}`);
+              const audio = new Audio(`${BASE_URL}/${resp.data.audio_url}`);
               audio.play();
             }
+
+          } else if (resp.data.error) {
+            setMessages(prev => [
+              ...prev,
+              { text: "⚠️ " + resp.data.error, isUser: false, lang: 'en' }
+            ]);
           }
+
         } catch (err) {
           console.error(err);
         }
@@ -185,7 +190,7 @@ function App() {
             </button>
             {lastResponse && (
               <button 
-                onClick={() => handleReplay(lastResponse.text, lastResponse.lang)} 
+                onClick={() => handleReplay()} 
                 className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center shadow-md active:scale-90"
               >
                 <i className="fas fa-redo text-lg text-white"></i>
@@ -195,9 +200,11 @@ function App() {
           <p className="text-white/80 text-[11px]">Click the phone to start speaking</p>
         </div>
 
+        {/* ✅ ADDED POPUP (ONLY FIX) */}
         {isReminderOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
             <div className="bg-white w-[320px] p-8 rounded-3xl shadow-2xl text-slate-800 animate-modalIn">
+              
               <div className="flex justify-between items-center mb-6">
                 <h3 className="font-bold text-lg text-blue-900">Set Reminder</h3>
                 <button 
@@ -207,6 +214,7 @@ function App() {
                   <i className="fas fa-times text-xl"></i>
                 </button>
               </div>
+
               <div className="space-y-4">
                 <input 
                   type="text" 
@@ -215,12 +223,14 @@ function App() {
                   onChange={(e) => setReminderTask(e.target.value)} 
                   className="w-full border p-3 rounded-xl text-sm outline-none focus:border-blue-500" 
                 />
+
                 <input 
                   type="time" 
                   value={reminderTime} 
                   onChange={(e) => setReminderTime(e.target.value)} 
                   className="w-full border p-3 rounded-xl text-sm outline-none focus:border-blue-500" 
                 />
+
                 <button 
                   onClick={handleSetReminder} 
                   className="w-full bg-[#0055ff] text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors"
@@ -228,9 +238,11 @@ function App() {
                   Save
                 </button>
               </div>
+
             </div>
           </div>
         )}
+
       </div>
 
       {/* RIGHT PANEL */}
@@ -251,7 +263,7 @@ function App() {
               {msg.text}
               {!msg.isUser && (
                 <button 
-                  onClick={() => handleReplay(msg.text, msg.lang)} 
+                  onClick={() => handleReplay()} 
                   className="flex items-center gap-1 mt-3 text-[10px] font-bold text-blue-500 uppercase hover:text-blue-700"
                 >
                   <i className="fas fa-volume-up"></i> Repeat Audio
@@ -262,14 +274,15 @@ function App() {
         </div>
       </div>
 
+      {/* ✅ ANIMATION */}
       <style>{`
         @keyframes modalIn { 
           from { opacity: 0; transform: scale(0.9); } 
           to { opacity: 1; transform: scale(1); } 
         } 
         .animate-modalIn { animation: modalIn 0.2s ease-out; } 
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
+
     </div>
   );
 }

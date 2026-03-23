@@ -167,4 +167,4 @@ def get_best_answer(query_en):
     return answers[idx] if sims[idx] > 0.6 else "Please consult a doctor."
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
