@@ -5,4 +5,5 @@ sentence-transformers
 scikit-learn
 deep-translator
 gtts
+SpeechRecognition
 gunicorn
