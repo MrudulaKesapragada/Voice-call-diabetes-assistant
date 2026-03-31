@@ -1,14 +1,10 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import pandas as pd
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-from deep_translator import GoogleTranslator
 import sqlite3
 import threading
 import time
 from datetime import datetime
-import speech_recognition as sr
 from pydub import AudioSegment
 from gtts import gTTS
 import os
@@ -21,7 +17,6 @@ AudioSegment.ffprobe = imageio_ffmpeg.get_ffmpeg_exe()
 app = Flask(__name__)
 CORS(app)
 
-# Root route for Render health check
 @app.route("/")
 def home():
     return jsonify({"status": "Backend is running"})
@@ -45,7 +40,6 @@ print("CSV loaded successfully. Rows:", len(df))
 
 embedder = None
 question_embeddings = None
-
 active_notifications = []
 
 # --- DATABASE ---
@@ -123,6 +117,8 @@ def process_voice():
     wav_path = f"temp_{file_id}.wav"
 
     try:
+        import speech_recognition as sr
+
         audio.save(webm_path)
         print(f"Saved audio: {webm_path}")
 
@@ -143,6 +139,7 @@ def process_voice():
         print("USER:", user_text)
 
         if lang == "te":
+            from deep_translator import GoogleTranslator
             search_text = GoogleTranslator(source='auto', target='en').translate(user_text)
             ans_en = get_best_answer(search_text)
             final_ans = GoogleTranslator(source='auto', target='te').translate(ans_en)
@@ -189,8 +186,11 @@ def get_best_answer(query_en):
     global embedder, question_embeddings
 
     if embedder is None:
+        from sentence_transformers import SentenceTransformer
         embedder = SentenceTransformer("all-MiniLM-L6-v2")
         question_embeddings = embedder.encode(questions, normalize_embeddings=True)
+
+    from sklearn.metrics.pairwise import cosine_similarity
 
     query_emb = embedder.encode([query_en], normalize_embeddings=True)
     sims = cosine_similarity(query_emb, question_embeddings)[0]
