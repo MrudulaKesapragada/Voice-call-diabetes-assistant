@@ -86,7 +86,7 @@ function App() {
       };
 
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
+        const blob = new Blob(chunks, { type: "audio/webm;codecs=opus" });
 
         const formData = new FormData();
         formData.append("audio", blob);
@@ -119,9 +119,17 @@ function App() {
             ]);
           }
 
-        } catch (err) {
-          console.error(err);
-        }
+        }  catch (err) {
+            console.error("Voice request failed:", err);
+
+            const errorMsg =
+            err.response?.data?.error || "Voice processing failed on server.";
+
+            setMessages(prev => [
+            ...prev,
+            { text: "⚠️ " + errorMsg, isUser: false, lang: "en" }
+  ]);
+}
 
         setIsCalling(false);
         setStatus("Status: Ready");

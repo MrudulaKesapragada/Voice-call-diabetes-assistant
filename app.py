@@ -13,7 +13,10 @@ from pydub import AudioSegment
 from gtts import gTTS
 import os
 import uuid
+import imageio_ffmpeg
 
+AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
+AudioSegment.ffprobe = imageio_ffmpeg.get_ffmpeg_exe()
 app = Flask(__name__)
 CORS(app)
 
@@ -100,23 +103,25 @@ def process_voice():
     audio = request.files.get('audio')
 
     if not audio:
-        return jsonify({"error": "No audio"}), 400
+        return jsonify({"error": "No audio uploaded"}), 400
 
-    webm_path = "temp.webm"
-    wav_path = "temp.wav"
-
-    audio.save(webm_path)
-
-    # Convert webm → wav
-    sound = AudioSegment.from_file(webm_path)
-    sound.export(wav_path, format="wav")
-
-    recognizer = sr.Recognizer()
-
-    with sr.AudioFile(wav_path) as source:
-        audio_data = recognizer.record(source)
+    file_id = str(uuid.uuid4())
+    webm_path = f"temp_{file_id}.webm"
+    wav_path = f"temp_{file_id}.wav"
 
     try:
+        audio.save(webm_path)
+        print(f"Saved audio: {webm_path}")
+
+        sound = AudioSegment.from_file(webm_path, format="webm")
+        sound.export(wav_path, format="wav")
+        print(f"Converted to wav: {wav_path}")
+
+        recognizer = sr.Recognizer()
+
+        with sr.AudioFile(wav_path) as source:
+            audio_data = recognizer.record(source)
+
         if lang == "te":
             user_text = recognizer.recognize_google(audio_data, language="te-IN")
         else:
@@ -124,31 +129,38 @@ def process_voice():
 
         print("USER:", user_text)
 
-    except:
-        return jsonify({"error": "Speech not recognized"}), 400
+        if lang == "te":
+            search_text = GoogleTranslator(source='auto', target='en').translate(user_text)
+            ans_en = get_best_answer(search_text)
+            final_ans = GoogleTranslator(source='auto', target='te').translate(ans_en)
+        else:
+            final_ans = get_best_answer(user_text)
 
-    # --- AI RESPONSE ---
-    if lang == "te":
-        search_text = GoogleTranslator(source='auto', target='en').translate(user_text)
-        ans_en = get_best_answer(search_text)
-        final_ans = GoogleTranslator(source='auto', target='te').translate(ans_en)
-    else:
-        final_ans = get_best_answer(user_text)
+        audio_file = f"response_{uuid.uuid4()}.mp3"
+        tts = gTTS(text=final_ans, lang='te' if lang == 'te' else 'en')
+        tts.save(audio_file)
 
-    # --- GENERATE AUDIO ---
-    audio_file = f"response_{uuid.uuid4()}.mp3"
-    tts = gTTS(text=final_ans, lang='te' if lang == 'te' else 'en')
-    tts.save(audio_file)
+        return jsonify({
+            "user_text": user_text,
+            "assistant_response": final_ans,
+            "audio_url": audio_file
+        })
 
-    # cleanup temp files
-    if os.path.exists(webm_path): os.remove(webm_path)
-    if os.path.exists(wav_path): os.remove(wav_path)
+    except sr.UnknownValueError:
+        return jsonify({"error": "Speech not recognized clearly"}), 400
 
-    return jsonify({
-        "user_text": user_text,
-        "assistant_response": final_ans,
-        "audio_url": audio_file
-    })
+    except sr.RequestError as e:
+        return jsonify({"error": f"Speech recognition service error: {str(e)}"}), 500
+
+    except Exception as e:
+        print("ERROR in /process_voice:", str(e))
+        return jsonify({"error": f"Voice processing failed: {str(e)}"}), 500
+
+    finally:
+        if os.path.exists(webm_path):
+            os.remove(webm_path)
+        if os.path.exists(wav_path):
+            os.remove(wav_path)
 
 @app.route('/set_reminder', methods=['POST'])
 def set_reminder():

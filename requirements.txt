@@ -8,3 +8,4 @@ gtts
 SpeechRecognition
 pydub
 gunicorn
+imageio-ffmpeg
