@@ -17,11 +17,21 @@ import imageio_ffmpeg
 
 AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
 AudioSegment.ffprobe = imageio_ffmpeg.get_ffmpeg_exe()
+
 app = Flask(__name__)
 CORS(app)
 
+# ✅ ADDED ROOT ROUTE
+@app.route("/")
+def home():
+    return jsonify({"status": "Backend is running"})
+
 # --- AI DATA ---
-df = pd.read_csv("diabetes_qa_combined.csv", encoding="latin1")
+# ✅ FIXED CSV PATH FOR RENDER
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+csv_path = os.path.join(BASE_DIR, "diabetes_qa_combined.csv")
+df = pd.read_csv(csv_path, encoding="latin1")
+
 questions = df["question"].astype(str).tolist()
 answers = df["answer"].astype(str).tolist()
 
@@ -42,8 +52,6 @@ def init_db():
 init_db()
 
 # --- REMINDER THREAD ---
-
-
 def check_reminders():
     while True:
         now = datetime.now().strftime("%H:%M")
@@ -58,7 +66,6 @@ def check_reminders():
         reminders = cursor.fetchall()
 
         for r_id, task in reminders:
-            # ✅ Update DB
             cursor.execute(
                 "UPDATE reminders SET status = 'completed' WHERE id = ?",
                 (r_id,)
@@ -67,12 +74,10 @@ def check_reminders():
 
             print(f"⏰ Reminder Triggered: {task}")
 
-            # 🔊 Generate voice
             audio_file = f"reminder_{uuid.uuid4()}.mp3"
             tts = gTTS(text=f"Reminder: {task}", lang='en')
             tts.save(audio_file)
 
-            # 📩 Send to frontend
             active_notifications.append({
                 "id": r_id,
                 "task": task,
@@ -184,7 +189,7 @@ def get_best_answer(query_en):
     idx = sims.argmax()
 
     return answers[idx] if sims[idx] > 0.6 else "Please consult a doctor."
+
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
