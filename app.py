@@ -21,19 +21,27 @@ AudioSegment.ffprobe = imageio_ffmpeg.get_ffmpeg_exe()
 app = Flask(__name__)
 CORS(app)
 
-# ✅ ADDED ROOT ROUTE
+# Root route for Render health check
 @app.route("/")
 def home():
     return jsonify({"status": "Backend is running"})
 
 # --- AI DATA ---
-# ✅ FIXED CSV PATH FOR RENDER
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 csv_path = os.path.join(BASE_DIR, "diabetes_qa_combined.csv")
-df = pd.read_csv(csv_path, encoding="latin1")
 
+print("BASE_DIR:", BASE_DIR)
+print("CSV PATH:", csv_path)
+print("CSV EXISTS:", os.path.exists(csv_path))
+
+if not os.path.exists(csv_path):
+    raise FileNotFoundError(f"CSV not found at: {csv_path}")
+
+df = pd.read_csv(csv_path, encoding="latin1")
 questions = df["question"].astype(str).tolist()
 answers = df["answer"].astype(str).tolist()
+
+print("CSV loaded successfully. Rows:", len(df))
 
 embedder = None
 question_embeddings = None
