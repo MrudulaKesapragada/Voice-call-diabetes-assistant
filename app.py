@@ -17,6 +17,7 @@ AudioSegment.ffprobe = imageio_ffmpeg.get_ffmpeg_exe()
 app = Flask(__name__)
 CORS(app)
 
+# Root route for Render health check
 @app.route("/")
 def home():
     return jsonify({"status": "Backend is running"})
@@ -38,16 +39,20 @@ answers = df["answer"].astype(str).tolist()
 
 print("CSV loaded successfully. Rows:", len(df))
 
-embedder = None
-question_embeddings = None
 active_notifications = []
 
 # --- DATABASE ---
 def init_db():
     conn = sqlite3.connect('reminders.db')
     cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS reminders 
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT, remind_time TEXT, status TEXT DEFAULT 'pending')''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS reminders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task TEXT,
+            remind_time TEXT,
+            status TEXT DEFAULT 'pending'
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -74,7 +79,7 @@ def check_reminders():
             )
             conn.commit()
 
-            print(f"⏰ Reminder Triggered: {task}")
+            print(f"Reminder Triggered: {task}")
 
             audio_file = f"reminder_{uuid.uuid4()}.mp3"
             tts = gTTS(text=f"Reminder: {task}", lang='en')
@@ -102,6 +107,25 @@ def get_notifications():
 @app.route('/<filename>')
 def serve_audio(filename):
     return send_from_directory('.', filename)
+
+# --- LIGHTWEIGHT ANSWER MATCHING ---
+def get_best_answer(query_en):
+    query_en = query_en.lower().strip()
+
+    best_match = None
+    best_score = 0
+
+    for q, a in zip(questions, answers):
+        q_lower = q.lower()
+
+        common_words = set(query_en.split()) & set(q_lower.split())
+        score = len(common_words)
+
+        if score > best_score:
+            best_score = score
+            best_match = a
+
+    return best_match if best_match else "Please consult a doctor."
 
 # --- PROCESS VOICE ---
 @app.route('/process_voice', methods=['POST'])
@@ -172,31 +196,19 @@ def process_voice():
         if os.path.exists(wav_path):
             os.remove(wav_path)
 
+# --- SET REMINDER ---
 @app.route('/set_reminder', methods=['POST'])
 def set_reminder():
     data = request.json
     conn = sqlite3.connect('reminders.db')
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO reminders (task, remind_time) VALUES (?, ?)", (data['task'], data['time']))
+    cursor.execute(
+        "INSERT INTO reminders (task, remind_time) VALUES (?, ?)",
+        (data['task'], data['time'])
+    )
     conn.commit()
     conn.close()
     return jsonify({"status": "success"})
-
-def get_best_answer(query_en):
-    global embedder, question_embeddings
-
-    if embedder is None:
-        from sentence_transformers import SentenceTransformer
-        embedder = SentenceTransformer("all-MiniLM-L6-v2")
-        question_embeddings = embedder.encode(questions, normalize_embeddings=True)
-
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    query_emb = embedder.encode([query_en], normalize_embeddings=True)
-    sims = cosine_similarity(query_emb, question_embeddings)[0]
-    idx = sims.argmax()
-
-    return answers[idx] if sims[idx] > 0.6 else "Please consult a doctor."
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
