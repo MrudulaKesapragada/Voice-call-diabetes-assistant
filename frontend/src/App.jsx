@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-// ✅ ADDED (ONLY CHANGE)
 const BASE_URL = import.meta.env.VITE_BACKEND_URL;
 console.log("BASE_URL:", BASE_URL);
 
@@ -9,9 +8,6 @@ function App() {
   const [isCalling, setIsCalling] = useState(false);
   const [status, setStatus] = useState("Status: Ready to help");
   const [language, setLanguage] = useState("en");
-  const [isReminderOpen, setIsReminderOpen] = useState(false);
-  const [reminderTask, setReminderTask] = useState("");
-  const [reminderTime, setReminderTime] = useState("");
   const [lastResponse, setLastResponse] = useState(null);
   const [messages, setMessages] = useState([
     { text: "Hello! Choose your language and click the phone icon to ask me anything about Diabetes.", isUser: false, lang: 'en' }
@@ -25,54 +21,26 @@ function App() {
     }
   }, [messages]);
 
-  // ✅ FIXED URL
-  useEffect(() => {
-    const checkNotifications = async () => {
-      try {
-        const response = await axios.get(`${BASE_URL}/get_notifications`);
-        if (response.data && response.data.length > 0) {
-          response.data.forEach(notification => {
+  // ✅ Browser speech instead of backend MP3
+  const speakText = (text, lang = "en-IN") => {
+    if (!window.speechSynthesis) return;
 
-            setMessages(prev => [...prev, {
-              text: `⏰ REMINDER: ${notification.task}`,
-              isUser: false,
-              lang: 'en'
-            }]);
-
-            if (notification.audio_url) {
-              const audio = new Audio(`${BASE_URL}/${notification.audio_url}`);
-              audio.play();
-            }
-
-          });
-        }
-      } catch (err) {
-        console.error("Polling error:", err);
-      }
-    };
-    const interval = setInterval(checkNotifications, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleReplay = async () => {
-    if (!lastResponse?.audio_url) return;
-    const audio = new Audio(`${BASE_URL}/${lastResponse.audio_url}`);
-    audio.play();
+    window.speechSynthesis.cancel(); // stop previous speech if any
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    window.speechSynthesis.speak(utterance);
   };
 
-  const handleSetReminder = async () => {
-    if (!reminderTask || !reminderTime) return alert("Please fill all fields");
-    try {
-      await axios.post(`${BASE_URL}/set_reminder`, { task: reminderTask, time: reminderTime });
-      alert(`Reminder set for ${reminderTime}`);
-      setReminderTask(""); 
-      setReminderTime(""); 
-      setIsReminderOpen(false);
-    } catch (err) { console.error(err); }
+  const handleReplay = () => {
+    if (!lastResponse?.assistant_response) return;
+    speakText(
+      lastResponse.assistant_response,
+      language === "te" ? "te-IN" : "en-IN"
+    );
   };
 
   const handleCall = async () => {
-    setIsCalling(true); 
+    setIsCalling(true);
     setStatus("Listening...");
 
     try {
@@ -93,10 +61,7 @@ function App() {
         formData.append("lang", language);
 
         try {
-          const resp = await axios.post(
-            `${BASE_URL}/process_voice`,
-            formData
-          );
+          const resp = await axios.post(`${BASE_URL}/process_voice`, formData);
 
           if (resp.data.user_text) {
             setLastResponse(resp.data);
@@ -107,10 +72,11 @@ function App() {
               { text: resp.data.assistant_response, isUser: false, lang: language }
             ]);
 
-            if (resp.data.audio_url) {
-              const audio = new Audio(`${BASE_URL}/${resp.data.audio_url}`);
-              audio.play();
-            }
+            // ✅ Speak using browser
+            speakText(
+              resp.data.assistant_response,
+              language === "te" ? "te-IN" : "en-IN"
+            );
 
           } else if (resp.data.error) {
             setMessages(prev => [
@@ -119,17 +85,17 @@ function App() {
             ]);
           }
 
-        }  catch (err) {
-            console.error("Voice request failed:", err);
+        } catch (err) {
+          console.error("Voice request failed:", err);
 
-            const errorMsg =
+          const errorMsg =
             err.response?.data?.error || "Voice processing failed on server.";
 
-            setMessages(prev => [
+          setMessages(prev => [
             ...prev,
             { text: "⚠️ " + errorMsg, isUser: false, lang: "en" }
-  ]);
-}
+          ]);
+        }
 
         setIsCalling(false);
         setStatus("Status: Ready");
@@ -144,7 +110,10 @@ function App() {
 
     } catch (err) {
       console.error(err);
-      setMessages(prev => [...prev, { text: "Error: Could not hear clearly.", isUser: false, lang: 'en' }]);
+      setMessages(prev => [
+        ...prev,
+        { text: "Error: Could not hear clearly.", isUser: false, lang: 'en' }
+      ]);
       setIsCalling(false);
       setStatus("Status: Ready");
     }
@@ -156,25 +125,20 @@ function App() {
       {/* LEFT PANEL */}
       <div className="w-1/2 bg-[#0055ff] p-8 flex flex-col items-center justify-between text-white relative">
         
-        <button 
-          onClick={() => setIsReminderOpen(true)}
-          className="absolute top-6 left-6 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-all border border-white/30 shadow-sm"
-          title="Set Reminder"
-        >
-          <i className="fas fa-bell text-white text-sm"></i>
-        </button>
-
+        {/* SAME HEADER */}
         <div className="text-center mt-4">
           <h2 className="text-2xl font-semibold">Diabetes Health Assistant</h2>
           <div className="text-white/70 text-xs mt-1">{status}</div>
         </div>
 
+        {/* SAME CIRCLE ICON */}
         <div className="w-44 h-44 rounded-full bg-[#1e88e5] flex items-center justify-center shadow-lg border-2 border-white/10 relative">
           <i className="fas fa-hand-holding-medical text-6xl text-white"></i>
           {isCalling && <div className="absolute inset-0 rounded-full bg-white/20 animate-ping"></div>}
         </div>
 
         <div className="flex flex-col items-center gap-6 w-full">
+          {/* SAME LANGUAGE SELECT */}
           <div className="relative w-44">
             <select 
               value={language}
@@ -189,6 +153,7 @@ function App() {
             </div>
           </div>
 
+          {/* SAME BUTTONS */}
           <div className="flex items-center gap-4">
             <button 
               onClick={handleCall} 
@@ -196,61 +161,19 @@ function App() {
             >
               <i className="fas fa-phone text-2xl text-white"></i>
             </button>
+
             {lastResponse && (
               <button 
-                onClick={() => handleReplay()} 
+                onClick={handleReplay} 
                 className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center shadow-md active:scale-90"
               >
                 <i className="fas fa-redo text-lg text-white"></i>
               </button>
             )}
           </div>
+
           <p className="text-white/80 text-[11px]">Click the phone to start speaking</p>
         </div>
-
-        {/* ✅ ADDED POPUP (ONLY FIX) */}
-        {isReminderOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="bg-white w-[320px] p-8 rounded-3xl shadow-2xl text-slate-800 animate-modalIn">
-              
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="font-bold text-lg text-blue-900">Set Reminder</h3>
-                <button 
-                  onClick={() => setIsReminderOpen(false)} 
-                  className="text-slate-400 hover:text-red-500"
-                >
-                  <i className="fas fa-times text-xl"></i>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <input 
-                  type="text" 
-                  placeholder="Task Name" 
-                  value={reminderTask} 
-                  onChange={(e) => setReminderTask(e.target.value)} 
-                  className="w-full border p-3 rounded-xl text-sm outline-none focus:border-blue-500" 
-                />
-
-                <input 
-                  type="time" 
-                  value={reminderTime} 
-                  onChange={(e) => setReminderTime(e.target.value)} 
-                  className="w-full border p-3 rounded-xl text-sm outline-none focus:border-blue-500" 
-                />
-
-                <button 
-                  onClick={handleSetReminder} 
-                  className="w-full bg-[#0055ff] text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors"
-                >
-                  Save
-                </button>
-              </div>
-
-            </div>
-          </div>
-        )}
-
       </div>
 
       {/* RIGHT PANEL */}
@@ -258,6 +181,7 @@ function App() {
         <div className="p-5 border-b bg-white">
           <h3 className="text-sm font-semibold text-slate-600">Conversation History</h3>
         </div>
+
         <div ref={chatBoxRef} className="flex-1 p-6 overflow-y-auto space-y-4 flex flex-col scrollbar-hide">
           {messages.map((msg, i) => (
             <div 
@@ -269,9 +193,10 @@ function App() {
               } p-4 max-w-[85%] text-sm`}
             >
               {msg.text}
-              {!msg.isUser && (
+
+              {!msg.isUser && i !== 0 && (
                 <button 
-                  onClick={() => handleReplay()} 
+                  onClick={handleReplay} 
                   className="flex items-center gap-1 mt-3 text-[10px] font-bold text-blue-500 uppercase hover:text-blue-700"
                 >
                   <i className="fas fa-volume-up"></i> Repeat Audio
@@ -281,16 +206,6 @@ function App() {
           ))}
         </div>
       </div>
-
-      {/* ✅ ANIMATION */}
-      <style>{`
-        @keyframes modalIn { 
-          from { opacity: 0; transform: scale(0.9); } 
-          to { opacity: 1; transform: scale(1); } 
-        } 
-        .animate-modalIn { animation: modalIn 0.2s ease-out; } 
-      `}</style>
-
     </div>
   );
 }

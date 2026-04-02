@@ -1,11 +1,8 @@
-flask
+Flask
 flask-cors
 pandas
-sentence-transformers
-scikit-learn
-deep-translator
-gtts
-SpeechRecognition
 pydub
-gunicorn
 imageio-ffmpeg
+SpeechRecognition
+deep-translator
+gunicorn
